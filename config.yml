@@ -1,0 +1,193 @@
+web_server: yes
+templates:
+  tv:
+    configure_series:
+      settings:
+        quality: 720p hdtv+
+        identified_by: ep
+        path: '/media/series/{{tvdb_series_name}}/{{tvdb_season}}'
+      from:
+        trakt_list:
+          account: edgary777
+          list: My TV Shows
+          type: shows
+
+  tv_packs:
+    configure_series:
+      settings:
+        quality: 720p+
+        season_packs: 5
+      from:
+        trakt_list:
+          account: edgary777
+          list: My TV Shows
+          type: shows
+  reject:
+    regexp:
+      reject:
+        - \b(s|d)ub(s|bed|lado|titulado)?\b
+        - \bhc\b
+        - \bdual\b
+        - \b3d\b
+        - \bfre(nch)?\b
+        - \bita(lian)?\b
+        - \bspa(nish)?\b
+        - \bger(man)?\b
+        - \bcastellano\b
+        - \brus(sian)?\b
+
+    regexp:
+      from: title
+      reject:
+        - SceneTime
+        - Scenetime
+        - scenetime
+        - www.SceneTime.com
+    content_filter:
+      reject:
+        - '*.rar'
+        - '*.zip'
+
+  reject_packs:
+    regexp:
+      reject:
+        - \b(s|d)ub(s|bed|lado|titulado)?\b
+        - \bhc\b
+        - \bdual\b
+        - \b3d\b
+        - \bfre(nch)?\b
+        - \bita(lian)?\b
+        - \bspa(nish)?\b
+        - \bger(man)?\b
+        - \bcastellano\b
+        - \brus(sian)?\b
+
+    regexp:
+      from: title
+      reject:
+        - SceneTime
+        - Scenetime
+        - scenetime
+        - www.SceneTime.com
+tasks:
+  find_series:
+    priority: 1
+    seen: local
+    trakt_list:
+      account: edgary777
+      list: My TV Shows
+      type: episodes
+    accept_all: yes
+    set_series_begin: yes
+    list_remove:
+      - trakt_list:
+          account: edgary777
+          list: My TV Shows
+          type: shows
+    list_add:
+      - trakt_list:
+          account: edgary777
+          list: My TV Shows
+          type: shows
+
+  get_seasons:
+    priority: 2
+    template:
+      - tv_packs
+      - reject_packs
+    metainfo_series: yes
+    thetvdb_lookup: yes
+    require_field: series_name
+    discover:
+      what:
+        - next_series_seasons:
+            from_start: yes
+      from:
+        - piratebay:
+            category: highres tv
+        - limetorrents:
+            category: tv
+        - rarbg:
+            category: [1, 18, 41, 49]
+    set:
+      content_directory: '{{tvdb_series_name}}_{{tvdb_ep_id}}_{{tvdb_ep_name}}'
+    deluge:
+      movedone: /media/torrents/completed
+      ratio: 1.5
+
+  get_episodes:
+    priority: 3
+    metainfo_series: yes
+    thetvdb_lookup: yes
+    require_field: series_name
+    template:
+      - tv
+      - reject
+    discover:
+      what:
+        - next_series_episodes:
+            from_start: yes
+      from:
+        - piratebay:
+            category: highres tv
+        - limetorrents:
+            category: tv
+        - rarbg:
+            category: [1, 18, 41, 49]
+    content_size:
+      max: 1000
+    set:
+      content_directory: '{{tvdb_series_name}}_{{tvdb_ep_id}}_{{tvdb_ep_name}}'
+      content_filename: '{{tvdb_series_name}}.{{tvdb_ep_id}} {{tvdb_ep_name}} {{quality}}'
+    deluge:
+      content_filename: '{{tvdb_series_name}}.{{tvdb_ep_id}} {{tvdb_ep_name}} {{quality}}'
+      path: '/media/series/{{tvdb_series_name}}/{{tvdb_season}}'
+      ratio: 1.5
+
+  decompress_season_packs:
+    priority: 4
+    accept_all: yes
+    filesystem:
+      path: /media/torrents/completed
+      recursive: yes
+      regexp: '\.(rar|r0+[01](/01)|zip)'
+    decompress:
+      to: /media/torrents/completed
+      delete_archive: yes
+
+  move_season_packs:
+    priority: 5
+    accept_all: yes
+    metainfo_series: yes
+    thetvdb_lookup: yes
+    require_field: series_name
+    metainfo_series: yes
+    require_field:
+      - series_name
+      - series_season
+    filesystem:
+      path: /media/torrents/completed
+      regexp: '.*\.(avi|mkv|mp4)$'
+      recursive: yes
+    move:
+      to: '/media/series/{{tvdb_series_name}}/{{tvdb_season}}'
+      rename: '{{tvdb_series_name}}.{{tvdb_ep_id}} {{tvdb_ep_name}} {{quality}}'
+
+  get_subtitles:
+    priority: 6
+    filesystem:
+      path: /media
+      regexp: '.*\.(avi|mkv|mp4)$'
+      recursive: yes
+    accept_all: yes
+    seen: local
+    subliminal:
+      languages:
+        - spa
+        - eng
+      exact_match: no
+
+schedules:
+  - tasks: [find_series, get_seasons, get_episodes, decompress_season_packs, move_season_packs, get_subtitles]
+    interval:
+      minutes: 30
