@@ -1,2 +1,3 @@
-# flexget
-Flexget config
+# My Flexget config
+
+Work in progress
